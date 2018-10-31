@@ -1,0 +1,30 @@
+---
+title: Health and Economic Impacts from Severe Weather Events Analyzed from NOAA Storm
+  Database
+output:
+  html_document:
+    df_print: paged
+---
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+
+```
+
+## Synopsis
+In this report, we analyze a collection of storm data from a NOAA database to gain some insight into the most deleterious features of storms and severe weather events that have the most economic and human health impacts.
+
+## Data Processing
+Data is provided in CSV format with the first row containing column headers comprising aroughly 536MB of data. `tidyverse` library is used extensively throughout this analysis. For data processing, `read_csv` from this set of packages is used to read in the data.
+
+```{r}
+ds.raw <- read_csv('data/repdata_data_StormData.csv')
+head(ds.raw)
+print(dim(ds.raw))
+```
+
+```{r}
+ds.casualty.summary <- group_by(ds.raw, EVTYPE) %>% 
+                       summarize(TOT.FATALITIES = sum(FATALITIES), 
+                                 TOT.INJURIES = sum(INJURIES))
+```
+
