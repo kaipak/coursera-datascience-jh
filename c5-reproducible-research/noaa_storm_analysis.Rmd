@@ -11,16 +11,18 @@ library(tidyverse)
 ```
 
 ## Synopsis
-In this report, we analyze a collection of storm data from a NOAA database to gain some insight into the most deleterious features of storms and severe weather events that have the most economic and human health impacts.
+In this report, we analyze a collection of storm data from a NOAA database to gain some insight into the most deleterious features of storms and severe weather events that have the most economic and human health impacts. There is a wide variety of weather phenomena represented in the dataset from mild storms to more severe events such as blizzards, hurricanes, and tornados. In this report we attempt to quantify which weather events are correlated with the greatest impact to human health and economic impact including property and other monetary damage.
 
 ## Data Processing
 Data is provided in CSV format with the first row containing column headers comprising aroughly 536MB of data. `tidyverse` library is used extensively throughout this analysis. For data processing, `read_csv` from this set of packages is used to read in the data.
 
-```{r}
+```{r, cache = TRUE}
 ds.raw <- read_csv('data/repdata_data_StormData.csv')
 head(ds.raw)
 print(dim(ds.raw))
 ```
+
+To determine health and economic effects of major weather events, we `group_by` `EVTYPE` then summarize columns associated with casualties (`FATALITIES`, `INJURIES`) and ones associated with property damaage (`). For columns dealing with property damage, we need to be a little more thoughtful as the dataset has a somewhat unique way of assigning magnitude of property value where `PROPDMGEXP`, for example use K, M, B... to refer to $10^3, 10^6, 10^9$ dollars respectively.
 
 ```{r}
 ds.casualty.summary <- group_by(ds.raw, EVTYPE) %>% 
