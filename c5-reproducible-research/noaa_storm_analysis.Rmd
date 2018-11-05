@@ -7,26 +7,130 @@ output:
 ---
 ```{r, echo=FALSE, message=FALSE}
 library(tidyverse)
-
+library(grid)
+library(gridExtra)
 ```
 
 ## Synopsis
-In this report, we analyze a collection of storm data from a NOAA database to gain some insight into the most deleterious features of storms and severe weather events that have the most economic and human health impacts. There is a wide variety of weather phenomena represented in the dataset from mild storms to more severe events such as blizzards, hurricanes, and tornados. In this report we attempt to quantify which weather events are correlated with the greatest impact to human health and economic impact including property and other monetary damage.
+In this report, we analyze a collection of weather data from a NOAA database to gain some insight into the most destructive types of  events that have the most severe economic and human health impacts. There is a wide variety of weather phenomena represented in the dataset from mild storms to more severe events such as blizzards, hurricanes, and tornados. In this report we identify which are correlated with the greatest impact to human health and economic activity including property and other monetary damage. This may instruct public policy with chanelling resources to the prevention and mitigation of the most damaging and harmful weather events.
 
 ## Data Processing
-Data is provided in CSV format with the first row containing column headers comprising aroughly 536MB of data. `tidyverse` library is used extensively throughout this analysis. For data processing, `read_csv` from this set of packages is used to read in the data.
+Data is provided in CSV format with the first row containing column headers comprising aroughly 536MB of data. The `tidyverse` library is used extensively throughout this analysis. For data processing, `read_csv` from this set of packages is used to read in the data.
 
-```{r, cache = TRUE}
+```{r, cache = TRUE, echo=TRUE}
 ds.raw <- read_csv('data/repdata_data_StormData.csv')
 head(ds.raw)
 print(dim(ds.raw))
 ```
 
-To determine health and economic effects of major weather events, we `group_by` `EVTYPE` then summarize columns associated with casualties (`FATALITIES`, `INJURIES`) and ones associated with property damaage (`). For columns dealing with property damage, we need to be a little more thoughtful as the dataset has a somewhat unique way of assigning magnitude of property value where `PROPDMGEXP`, for example use K, M, B... to refer to $10^3, 10^6, 10^9$ dollars respectively.
+To determine health and economic effects of major weather events, we `group_by` `EVTYPE` then summarize columns associated with casualties (`FATALITIES`, `INJURIES`) and ones associated with property damaage. For columns dealing with property damage, we need to be a little more thoughtful as the dataset has a somewhat unique way of assigning magnitude of property value where `PROPDMGEXP`, for example use K, M, B... to refer to $10^3, 10^6, 10^9$ dollars respectively. There are a few entries in this column which are ambiguous and at best open to intepretation. For example, `PROPDMGEXP` has some values with integers or lower case letters. Since these cases are relatively few in number compared to the dataset overall size (328 cases of ambiguous `PROPDMGEXP`, 49 for ambiguous `CROPDMGEXP`), we've opted to simply filter them out. A similar issue exists with `CROPDMG` and `CROPDMGEXP`.
 
-```{r}
-ds.casualty.summary <- group_by(ds.raw, EVTYPE) %>% 
-                       summarize(TOT.FATALITIES = sum(FATALITIES), 
-                                 TOT.INJURIES = sum(INJURIES))
+It should be noted that there is a lot of variability with how the weather events are labeled and indeed, several mispellings. Significant text processing work would need to be done to more sanely group events together (e.g., TORNADO and its multiple versions could be compacted into a single category). This will be done in future work.
+
+```{r, echo=TRUE}
+ds.sum.casualties <- select(ds.raw, EVTYPE, INJURIES, FATALITIES) %>%
+  group_by(EVTYPE) %>% summarize(TOT.INJURIES = sum(INJURIES),
+                                 TOT.FATALITIES = sum(FATALITIES)) %>%
+  arrange(desc(TOT.FATALITIES))
+
+ds.sum.prop.dmg <- filter(ds.raw, PROPDMGEXP == 'K' |
+                          PROPDMGEXP == 'M' | PROPDMGEXP == 'B' | 
+                          PROPDMGEXP == 'm' | PROPDMGEXP == 'H' |
+                          PROPDMGEXP == 'h' |
+                          is.na(PROPDMGEXP)) %>% 
+  select(EVTYPE, PROPDMG, PROPDMGEXP) %>%
+  mutate(PROPDMGNUM = case_when(
+        .$PROPDMGEXP == 'H' ~ .$PROPDMG * 100,
+        .$PROPDMGEXP == 'h' ~ .$PROPDMG * 100,
+        .$PROPDMGEXP == 'K' ~ .$PROPDMG * 10^3,
+        .$PROPDMGEXP == 'M' ~ .$PROPDMG * 10^6,
+        .$PROPDMGEXP == 'm' ~ .$PROPDMG * 10^6,
+        .$PROPDMGEXP == 'B' ~ .$PROPDMG * 10^9,
+        is.null(.$PROPDMGEXP) ~ 0
+    )
+  ) %>% group_by(EVTYPE) %>% 
+  summarize(TOT.PROP.DMG = sum(PROPDMGNUM),
+            TOT.PROP.DMG = sum(PROPDMGNUM)) %>%
+  arrange(desc(TOT.PROP.DMG))
+
+ds.sum.crop.dmg <- filter(ds.raw, CROPDMGEXP == 'K' |
+                          CROPDMGEXP == 'M' | CROPDMGEXP == 'B' | 
+                          CROPDMGEXP == 'm' | CROPDMGEXP == 'H' |
+                          CROPDMGEXP == 'h' |
+                          is.na(CROPDMGEXP)) %>% 
+  select(EVTYPE, CROPDMG, CROPDMGEXP) %>%
+  mutate(CROPDMGNUM = case_when(
+        .$CROPDMGEXP == 'H' ~ .$CROPDMG * 100,
+        .$CROPDMGEXP == 'h' ~ .$CROPDMG * 100,
+        .$CROPDMGEXP == 'K' ~ .$CROPDMG * 10^3,
+        .$CROPDMGEXP == 'M' ~ .$CROPDMG * 10^6,
+        .$CROPDMGEXP == 'm' ~ .$CROPDMG * 10^6,
+        .$CROPDMGEXP == 'B' ~ .$CROPDMG * 10^9,
+        is.null(.$CROPDMGEXP) ~ 0
+    )
+  ) %>% group_by(EVTYPE) %>% 
+  summarize(TOT.CROP.DMG = sum(CROPDMGNUM),
+            TOT.CROP.DMG = sum(CROPDMGNUM)) %>%
+  arrange(desc(TOT.CROP.DMG))
+
+```
+  
+## Results
+### Human Deaths and Injuries
+Looking at fatalities, we see in absolute terms, tornados dwarf every other weather event by a large amount. Below, we plot the top 10 most fatal events. Similarly, when we look at injuries, we see that tornado events completely outstrip every other weather category. Before we create the plot, we take care to reorder the dataset by descending injuries sum.
+
+```{r, echo=TRUE}
+p1 <- ggplot(ds.sum.casualties[1:10,], 
+       aes(x = reorder(EVTYPE, TOT.FATALITIES), y = TOT.FATALITIES), color = ) +
+  geom_col() + coord_flip() + 
+  labs(title = "Fatalities",
+       tag = "fig.1",
+       y = "Total Fatalities",
+       x = "Event Category") +
+  theme_light()
+
+ds.sum.casualties <- arrange(ds.sum.casualties, desc(TOT.INJURIES))
+
+p2 <- ggplot(ds.sum.casualties[1:10,], 
+       aes(x = reorder(EVTYPE, TOT.INJURIES), y = TOT.INJURIES)) +
+  geom_col() + coord_flip() + 
+  labs(title = "Injuries",
+       tag = "fig.2",
+       y = "Total Injuries",
+       x = "Event Category") +
+  theme_light()
+
+grid.arrange(p1, p2, top = textGrob("Human Impact of Weather Events",gp=gpar(fontsize=20,font=3)))
 ```
 
+
+### Economic Impact
+The result is a bit different when it comes to economic impact. For property damage, "Tornados, TSTM Wind, and Hail" cause the most damage, however, from an agriculture standpoint, deleterious weather conditions related to too much water, heat, or cold tend to be most damaging. As is obvious from the plot, agricultural damage is much less than property damage incurred from weather events.
+
+```{r, echo=TRUE}
+p3 <- ggplot(ds.sum.prop.dmg[1:10,], 
+       aes(x = reorder(EVTYPE, TOT.PROP.DMG), y = TOT.PROP.DMG / 10^6)) +
+  geom_col() +
+  labs(title = "Property Damage",
+       tag = "fig.3",
+       y = "Property Damage (USD, millions",
+       x = "Event Category") +
+  ylim(0, 1700) +
+  coord_flip() + 
+  theme_light()
+
+p4 <- ggplot(ds.sum.crop.dmg[1:10,], 
+       aes(x = reorder(EVTYPE, TOT.CROP.DMG), y = TOT.CROP.DMG / 10^6)) +
+  geom_col() + 
+  labs(title = "Crop Damage",
+       tag = "fig.4",
+       y = "Crop Damage (USD, millions)",
+       x = "Event Category") +
+  ylim(0, 1700) +
+  coord_flip() + 
+  theme_light()
+
+grid.arrange(p3, p4, top = textGrob("Economic Impact of Weather Events",gp=gpar(fontsize=20,font=3)))
+```
+
+  
